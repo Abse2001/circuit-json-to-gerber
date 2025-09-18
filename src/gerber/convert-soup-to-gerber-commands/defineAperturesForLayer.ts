@@ -225,6 +225,20 @@ export const getApertureConfigFromPcbPlatedHole = (
       circle_center_offset: elm.outer_height / 2,
     }
   }
+  if (
+    "rect_pad_width" in elm &&
+    typeof elm.rect_pad_width === "number" &&
+    "rect_pad_height" in elm &&
+    typeof elm.rect_pad_height === "number" &&
+    "pad_shape" in elm &&
+    elm.pad_shape === "rect"
+  ) {
+    return {
+      standard_template_code: "R",
+      x_size: elm.rect_pad_width,
+      y_size: elm.rect_pad_height,
+    }
+  }
   throw new Error(
     `Unsupported shape in getApertureConfigFromPcbPlatedHole: ${elm.shape}`,
   )
