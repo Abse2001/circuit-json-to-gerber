@@ -266,6 +266,37 @@ export const convertSoupToGerberCommands = (
             glayers[getGerberLayerName(layer, "copper")],
             glayers[getGerberLayerName(layer, "soldermask")],
           ]) {
+            if (element.shape.includes("hole_with_rect_pad")) {
+              const apertureConfig = getApertureConfigFromPcbPlatedHole(element)
+              const apertureNumber = findApertureNumber(glayer, apertureConfig)
+              const gb = gerberBuilder().add("select_aperture", {
+                aperture_number: apertureNumber,
+              })
+
+              const rotation =
+                "rect_ccw_rotation" in element &&
+                typeof element.rect_ccw_rotation === "number"
+                  ? element.rect_ccw_rotation
+                  : 0
+
+              if (rotation !== 0) {
+                gb.add("load_rotation", {
+                  rotation_degrees: rotation,
+                })
+              }
+
+              gb.add("flash_operation", {
+                x: element.x,
+                y: mfy(element.y),
+              })
+
+              if (rotation !== 0) {
+                gb.add("load_rotation", { rotation_degrees: 0 })
+              }
+
+              glayer.push(...gb.build())
+              continue
+            }
             if (element.shape === "pill") {
               // For pill shapes, use a circular aperture and draw the connecting line
               const circleApertureConfig = {
