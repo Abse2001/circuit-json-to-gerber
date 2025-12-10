@@ -246,6 +246,71 @@ export const convertSoupToGerberCommands = (
       transforms.push(translate(cx, cy), rotate(rad), translate(-cx, -cy))
     }
 
+    const transformMatrix =
+      transforms.length > 0 ? compose(...transforms) : undefined
+
+    const applyTransform = (point: { x: number; y: number }) =>
+      transformMatrix ? applyToPoint(transformMatrix, point) : point
+
+    if (layerType === "copper" && element.is_knockout) {
+      const padding = element.knockout_padding ?? {
+        left: 0.2,
+        right: 0.2,
+        top: 0.2,
+        bottom: 0.2,
+      }
+
+      const paddedRect = [
+        { x: initialX - padding.left, y: initialY - padding.top },
+        {
+          x: initialX + textWidth + padding.right,
+          y: initialY - padding.top,
+        },
+        {
+          x: initialX + textWidth + padding.right,
+          y: initialY + textHeight + padding.bottom,
+        },
+        {
+          x: initialX - padding.left,
+          y: initialY + textHeight + padding.bottom,
+        },
+      ].map(applyTransform)
+
+      glayer.push(
+        ...gerberBuilder()
+          .add("select_aperture", {
+            aperture_number: findApertureNumber(glayer, apertureConfig),
+          })
+          .add("start_region_statement", {})
+          .add("move_operation", {
+            x: paddedRect[0].x,
+            y: mfy(paddedRect[0].y),
+          })
+          .add("plot_operation", {
+            x: paddedRect[1].x,
+            y: mfy(paddedRect[1].y),
+          })
+          .add("plot_operation", {
+            x: paddedRect[2].x,
+            y: mfy(paddedRect[2].y),
+          })
+          .add("plot_operation", {
+            x: paddedRect[3].x,
+            y: mfy(paddedRect[3].y),
+          })
+          .add("plot_operation", {
+            x: paddedRect[0].x,
+            y: mfy(paddedRect[0].y),
+          })
+          .add("end_region_statement", {})
+          .build(),
+      )
+
+      glayer.push(
+        ...gerberBuilder().add("set_layer_polarity", { polarity: "C" }).build(),
+      )
+    }
+
     for (const char of element.text.toUpperCase()) {
       if (char === " ") {
         anchoredX += spaceWidth + letterSpacing
@@ -259,14 +324,8 @@ export const convertSoupToGerberCommands = (
         const x2 = anchoredX + path.x2 * fontSize
         const y2 = anchoredY + path.y2 * fontSize
 
-        let p1 = { x: x1, y: y1 }
-        let p2 = { x: x2, y: y2 }
-
-        if (transforms.length > 0) {
-          const transformMatrix = compose(...transforms)
-          p1 = applyToPoint(transformMatrix, p1)
-          p2 = applyToPoint(transformMatrix, p2)
-        }
+        const p1 = applyTransform({ x: x1, y: y1 })
+        const p2 = applyTransform({ x: x2, y: y2 })
 
         gerber.add("move_operation", { x: p1.x, y: mfy(p1.y) })
         gerber.add("plot_operation", { x: p2.x, y: mfy(p2.y) })
@@ -274,7 +333,14 @@ export const convertSoupToGerberCommands = (
 
       anchoredX += fontSize + letterSpacing
     }
+
     glayer.push(...gerber.build())
+
+    if (layerType === "copper" && element.is_knockout) {
+      glayer.push(
+        ...gerberBuilder().add("set_layer_polarity", { polarity: "D" }).build(),
+      )
+    }
   }
 
   for (const layer of ["top", "bottom", "edgecut"] as const) {
